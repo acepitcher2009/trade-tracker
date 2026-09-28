@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../api.js';
 import { formatPhone, parseLookup } from '../../shared/phone.js';
 import InstallTip from '../components/InstallTip.jsx';
 import { fmtDate, jobsText } from '../format.js';
@@ -11,7 +10,6 @@ function clean(raw) {
   return d.slice(0, 10);
 }
 
-
 function ClientInfo({ c }) {
   return (
     <>
@@ -21,44 +19,38 @@ function ClientInfo({ c }) {
         {jobsText(c.job_count)}
         {c.job_count > 0 && <> · Last: {c.last_job_type} ({c.last_job_status}), {fmtDate(c.last_job_at)}</>}
       </div>
+      {c.pending && <div className="chip">Not synced yet</div>}
     </>
   );
 }
 
-export default function Lookup({ terms, initialQ, onAdd, onOpen, onExpired }) {
+export default function Lookup({ data, snap, terms, initialQ, onAdd, onOpen }) {
   const noun = terms.client || 'Client';
   const [q, setQ] = useState(clean(initialQ || ''));
   const [result, setResult] = useState(null); // { q, mode, matches }
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState('');
   const input = useRef(null);
 
   useEffect(() => { input.current?.focus(); }, []);
 
+  // Reads only from the copy on this phone, so it is instant and works with no signal.
+  // Re-runs whenever a sync changes the local data (snap.version).
   useEffect(() => {
-    const p = parseLookup(q);
-    if (p.mode === 'partial') { setResult(null); setErr(''); setLoading(false); return; }
-    const ctl = new AbortController();
-    setLoading(true);
-    const t = setTimeout(() => {
-      api.lookup(q, ctl.signal)
-        .then((r) => { setResult({ q, ...r }); setErr(''); })
-        .catch((e) => {
-          if (e.name === 'AbortError') return;
-          if (e.status === 401) onExpired(); else setErr(e.message);
-        })
-        .finally(() => { if (!ctl.signal.aborted) setLoading(false); });
-    }, p.mode === 'full' ? 0 : 150);
-    return () => { clearTimeout(t); ctl.abort(); };
-  }, [q, onExpired]);
+    let live = true;
+    if (parseLookup(q).mode === 'partial' || !snap.ready) { setResult(null); return undefined; }
+    data.lookup(q).then((r) => { if (live) setResult({ q, ...r }); });
+    return () => { live = false; };
+  }, [q, snap.version, snap.ready, data]);
 
   const parsed = parseLookup(q);
   const fresh = result && result.q === q ? result : null;
   const shown = fresh?.matches ?? [];
 
   let body = null;
-  if (err) {
-    body = <div className="banner banner-warn" role="alert">{err}</div>;
+  if (!snap.ready) {
+    // Never show "NEW CLIENT" before the first download finishes: it could be wrong.
+    body = snap.syncing || snap.reachable
+      ? <div className="banner banner-wait" aria-busy="true">Downloading your {(terms.clients || 'clients').toLowerCase()}…</div>
+      : <div className="banner banner-warn" role="alert">Connect to the internet once to download your {(terms.clients || 'clients').toLowerCase()}. After that, lookups work with no signal.</div>;
   } else if (parsed.mode === 'partial') {
     body = <p className="hint">Type the full phone number, or just the last 4 digits.</p>;
   } else if (!fresh) {
@@ -106,7 +98,7 @@ export default function Lookup({ terms, initialQ, onAdd, onOpen, onExpired }) {
         autoFocus placeholder="Number or last 4" value={q}
         onChange={(e) => setQ(clean(e.target.value))} aria-describedby="phone-hint" />
       <div id="phone-hint" className="preview" aria-live="polite">
-        {parsed.mode === 'full' ? formatPhone(parsed.digits) : loading ? '' : ' '}
+        {parsed.mode === 'full' ? formatPhone(parsed.digits) : ' '}
       </div>
       {body}
       <InstallTip />

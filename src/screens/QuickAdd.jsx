@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, newId } from '../api.js';
 import { formatPhone } from '../../shared/phone.js';
 
-export default function QuickAdd({ me, terms, phone, onCancel, onSaved, onExpired }) {
+export default function QuickAdd({ data, cfg, terms, phone, onCancel, onSaved }) {
   const noun = terms.client || 'Client';
   const [name, setName] = useState('');
   const [jobType, setJobType] = useState(null);
@@ -11,25 +10,18 @@ export default function QuickAdd({ me, terms, phone, onCancel, onSaved, onExpire
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const nameRef = useRef(null);
-  // Stable ids for this attempt: retrying (or, in Stage 5, replaying offline) can never duplicate.
-  const ids = useRef({ client: newId(), job: newId() });
 
   useEffect(() => { nameRef.current?.focus(); }, []);
 
+  // Saves to this phone first (instant, works offline); the sync engine sends it to the server.
   const save = async (e) => {
     e.preventDefault();
-    if (!name.trim()) { setErr(`Enter a name.`); nameRef.current?.focus(); return; }
+    if (!name.trim()) { setErr('Enter a name.'); nameRef.current?.focus(); return; }
     setBusy(true); setErr('');
     try {
-      const r = await api.createClient({
-        id: ids.current.client, name, phone, address: address || undefined, notes: notes || undefined,
-        job: jobType ? { id: ids.current.job, job_type_id: jobType } : undefined,
-      });
+      const r = await data.createClient({ name, phone, address, notes, jobTypeId: jobType });
       onSaved(r.client, r.created);
-    } catch (ex) {
-      if (ex.status === 401) return onExpired();
-      setErr(ex.message); setBusy(false);
-    }
+    } catch (ex) { setErr(ex.message); setBusy(false); }
   };
 
   return (
@@ -46,7 +38,7 @@ export default function QuickAdd({ me, terms, phone, onCancel, onSaved, onExpire
       <fieldset className="jobs">
         <legend>Job type</legend>
         <div className="job-grid">
-          {me.job_types.map((t) => (
+          {cfg.job_types.map((t) => (
             <button type="button" key={t.id} className={`job-btn${jobType === t.id ? ' on' : ''}`}
               aria-pressed={jobType === t.id} onClick={() => setJobType(jobType === t.id ? null : t.id)}>
               {t.name}

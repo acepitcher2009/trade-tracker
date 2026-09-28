@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
-import { api, newId } from '../api.js';
+import { useEffect, useState } from 'react';
 import { formatPhone } from '../../shared/phone.js';
 import { fmtDate } from '../format.js';
 
@@ -8,7 +7,7 @@ const mapsUrl = (addr) => isApple
   ? `https://maps.apple.com/?daddr=${encodeURIComponent(addr)}`
   : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}`;
 
-function JobRow({ job, statuses, onChange, busy }) {
+function JobRow({ job, statuses, onChange }) {
   return (
     <li className="job">
       <div className="job-head">
@@ -21,7 +20,7 @@ function JobRow({ job, statuses, onChange, busy }) {
           const on = s.id === job.status_id;
           return (
             <button key={s.id} type="button" className={`status-btn${on ? ' on' : ''}`} aria-pressed={on}
-              disabled={busy} style={on ? { background: s.color, borderColor: s.color } : undefined}
+              style={on ? { background: s.color, borderColor: s.color } : undefined}
               onClick={() => !on && onChange(job, s)}>
               {s.label}
             </button>
@@ -32,38 +31,33 @@ function JobRow({ job, statuses, onChange, busy }) {
   );
 }
 
-export default function ClientCard({ me, terms, id, onBack, onExpired }) {
-  const noun = terms.client || 'Client';
-  const [client, setClient] = useState(null);
+export default function ClientCard({ data, snap, cfg, terms, id, onBack }) {
+  const [curId, setCurId] = useState(id);
+  const [client, setClient] = useState(undefined); // undefined = loading, null = missing
   const [err, setErr] = useState('');
-  const [busyJob, setBusyJob] = useState(null);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(false);
 
-  const fail = (e) => { if (e.status === 401) onExpired(); else setErr(e.message); };
-
+  // Read from the phone's own copy; refresh after any local change or sync (snap.version).
   useEffect(() => {
     let live = true;
-    api.getClient(id).then((r) => live && setClient(r.client)).catch((e) => live && fail(e));
+    data.getCard(curId).then((c) => {
+      if (!live) return;
+      setClient(c);
+      if (c && c.id !== curId) setCurId(c.id); // merged into the server's record for that phone number
+    });
     return () => { live = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [data, curId, snap.version]);
 
-  const changeStatus = async (job, status) => {
-    const prev = client;
-    setErr(''); setBusyJob(job.id);
-    // Optimistic: one tap updates the screen immediately; revert if the server says no.
-    setClient({ ...client, jobs: client.jobs.map((j) => j.id === job.id ? { ...j, status_id: status.id, status_key: status.key, status_label: status.label } : j) });
-    try { await api.setStatus(job.id, status.id); }
-    catch (e) { setClient(prev); fail(e); }
-    finally { setBusyJob(null); }
-  };
+  const run = async (fn) => { setErr(''); try { await fn(); } catch (e) { setErr(e.message); } };
 
   if (!client) {
     return (
       <section>
         <button className="link back" onClick={onBack}>← Back</button>
-        {err ? <div className="banner banner-warn" role="alert">{err}</div> : <div className="banner banner-wait" aria-busy="true">Loading…</div>}
+        {client === null
+          ? <div className="banner banner-warn" role="alert">This record isn't on this phone anymore.</div>
+          : <div className="banner banner-wait" aria-busy="true">Loading…</div>}
       </section>
     );
   }
@@ -74,6 +68,7 @@ export default function ClientCard({ me, terms, id, onBack, onExpired }) {
       <button className="link back" onClick={onBack}>← Back</button>
       <h1 className="card-name">{client.name}</h1>
       <div className="card-phone">{formatPhone(client.phone_digits)}</div>
+      {client.pending && <div className="chip chip-dark">Not synced yet</div>}
 
       <div className={`actions${client.address ? ' actions-3' : ''}`}>
         <a className="btn btn-action" href={`tel:${tel}`}>Call</a>
@@ -82,8 +77,8 @@ export default function ClientCard({ me, terms, id, onBack, onExpired }) {
       </div>
 
       {editing
-        ? <EditForm client={client} noun={noun} onCancel={() => setEditing(false)} onExpired={onExpired}
-            onSaved={(c) => { setClient(c); setEditing(false); }} />
+        ? <EditForm client={client} onCancel={() => setEditing(false)}
+            onSave={(fields) => run(async () => { await data.patchClient(client.id, fields); setEditing(false); })} />
         : (
           <div className="details">
             {client.address ? <div className="detail"><span className="detail-label">Address</span>{client.address}</div> : null}
@@ -99,37 +94,27 @@ export default function ClientCard({ me, terms, id, onBack, onExpired }) {
         {!adding && <button className="btn btn-small btn-primary" onClick={() => setAdding(true)}>+ Add {(terms.job || 'job').toLowerCase()}</button>}
       </div>
 
-      {adding && <AddJob me={me} terms={terms} clientId={client.id} onExpired={onExpired} onCancel={() => setAdding(false)}
-        onSaved={(job) => { setClient((c) => ({ ...c, jobs: [job, ...c.jobs.filter((j) => j.id !== job.id)] })); setAdding(false); }} />}
+      {adding && <AddJob cfg={cfg} terms={terms} onCancel={() => setAdding(false)}
+        onSave={(body) => run(async () => { await data.addJob(client.id, body); setAdding(false); })} />}
 
       {client.jobs.length === 0 && !adding && <p className="hint">No {(terms.jobs || 'jobs').toLowerCase()} yet.</p>}
       <ul className="job-list">
-        {client.jobs.map((j) => <JobRow key={j.id} job={j} statuses={me.statuses} busy={busyJob === j.id} onChange={changeStatus} />)}
+        {client.jobs.map((j) => <JobRow key={j.id} job={j} statuses={cfg.statuses}
+          onChange={(job, s) => run(() => data.setStatus(job.id, s.id))} />)}
       </ul>
     </section>
   );
 }
 
-function AddJob({ me, terms, clientId, onSaved, onCancel, onExpired }) {
+function AddJob({ cfg, terms, onSave, onCancel }) {
   const [type, setType] = useState(null);
   const [notes, setNotes] = useState('');
-  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const jobId = useRef(newId()); // retry-safe
-
-  const save = async () => {
-    if (!type) { setErr('Pick a job type.'); return; }
-    setBusy(true); setErr('');
-    try {
-      const r = await api.addJob(clientId, { id: jobId.current, job_type_id: type, notes: notes || undefined });
-      onSaved(r.job);
-    } catch (e) { if (e.status === 401) return onExpired(); setErr(e.message); setBusy(false); }
-  };
 
   return (
     <div className="panel">
       <div className="job-grid">
-        {me.job_types.map((t) => (
+        {cfg.job_types.map((t) => (
           <button type="button" key={t.id} className={`job-btn${type === t.id ? ' on' : ''}`} aria-pressed={type === t.id}
             onClick={() => setType(type === t.id ? null : t.id)}>{t.name}</button>
         ))}
@@ -139,38 +124,41 @@ function AddJob({ me, terms, clientId, onSaved, onCancel, onExpired }) {
       </label>
       {err && <p className="error" role="alert">{err}</p>}
       <div className="row">
-        <button type="button" className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'Saving…' : `Save ${(terms.job || 'job').toLowerCase()}`}</button>
+        <button type="button" className="btn btn-primary" onClick={() => (type ? onSave({ jobTypeId: type, notes }) : setErr('Pick a job type.'))}>
+          Save {(terms.job || 'job').toLowerCase()}
+        </button>
         <button type="button" className="btn btn-ghost" onClick={onCancel}>Cancel</button>
       </div>
     </div>
   );
 }
 
-function EditForm({ client, noun, onSaved, onCancel, onExpired }) {
+function EditForm({ client, onSave, onCancel }) {
   const [name, setName] = useState(client.name);
   const [address, setAddress] = useState(client.address || '');
   const [notes, setNotes] = useState(client.notes || '');
-  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
-  const save = async (e) => {
+  const submit = (e) => {
     e.preventDefault();
     if (!name.trim()) { setErr('Name can’t be empty.'); return; }
-    setBusy(true); setErr('');
-    try {
-      const r = await api.patchClient(client.id, { name, address, notes });
-      onSaved(r.client);
-    } catch (ex) { if (ex.status === 401) return onExpired(); setErr(ex.message); setBusy(false); }
+    // Only send what actually changed, so we never overwrite someone else's edit to another field.
+    const fields = {};
+    if (name.trim() !== client.name) fields.name = name;
+    if (address.trim() !== (client.address || '')) fields.address = address;
+    if (notes.trim() !== (client.notes || '')) fields.notes = notes;
+    if (!Object.keys(fields).length) return onCancel();
+    onSave(fields);
   };
 
   return (
-    <form className="panel" onSubmit={save}>
+    <form className="panel" onSubmit={submit}>
       <label className="field">Name<input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} autoCapitalize="words" /></label>
       <label className="field">Address<input value={address} onChange={(e) => setAddress(e.target.value)} maxLength={300} placeholder="Street, city" /></label>
       <label className="field">Notes<textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={4000} /></label>
       {err && <p className="error" role="alert">{err}</p>}
       <div className="row">
-        <button className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+        <button className="btn btn-primary">Save</button>
         <button type="button" className="btn btn-ghost" onClick={onCancel}>Cancel</button>
       </div>
     </form>

@@ -2,35 +2,53 @@ export class ApiError extends Error {
   constructor(status, message, data) { super(message); this.status = status; this.data = data; }
 }
 
-async function req(method, path, body, signal) {
-  let res;
+const TIMEOUT_MS = 20_000; // spotty signal: fail (and retry later) rather than hang forever
+
+async function fetchTransport(method, path, body, signal) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
+  signal?.addEventListener('abort', () => ctl.abort());
   try {
-    res = await fetch(`/api${path}`, {
-      method, signal, credentials: 'same-origin',
+    const res = await fetch(`/api${path}`, {
+      method, signal: ctl.signal, credentials: 'same-origin',
       headers: body !== undefined ? { 'content-type': 'application/json' } : undefined,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-  } catch (e) {
-    if (e.name === 'AbortError') throw e;
-    throw new ApiError(0, "Can't reach the server. Check your signal and try again.");
-  }
-  let data = null;
-  try { data = await res.json(); } catch { /* non-JSON */ }
-  if (!res.ok) throw new ApiError(res.status, data?.error || 'Something went wrong', data);
-  return data;
+    let data = null;
+    try { data = await res.json(); } catch { /* non-JSON */ }
+    return { status: res.status, data };
+  } finally { clearTimeout(timer); }
 }
 
-export const api = {
-  me: () => req('GET', '/me'),
-  login: (slug, pin) => req('POST', '/login', { slug, pin }),
-  logout: () => req('POST', '/logout', {}),
-  lookup: (q, signal) => req('GET', `/lookup?q=${encodeURIComponent(q)}`, undefined, signal),
-  createClient: (body) => req('POST', '/clients', body),
-  getClient: (id) => req('GET', `/clients/${id}`),
-  patchClient: (id, body) => req('PATCH', `/clients/${id}`, body),
-  addJob: (clientId, body) => req('POST', `/clients/${clientId}/jobs`, body),
-  setStatus: (jobId, statusId) => req('PATCH', `/jobs/${jobId}`, { status_id: statusId }),
-};
+// Swappable so tests can call the server handler directly.
+let transport = fetchTransport;
+export function setTransport(fn) { transport = fn ?? fetchTransport; }
+
+export function makeApi(getTransport) {
+  async function req(method, path, body, signal) {
+    let r;
+    try {
+      r = await getTransport()(method, path, body, signal);
+    } catch (e) {
+      if (signal?.aborted) throw e;
+      throw new ApiError(0, "Can't reach the server. Check your signal and try again.");
+    }
+    if (r.status < 200 || r.status >= 300) throw new ApiError(r.status, r.data?.error || 'Something went wrong', r.data);
+    return r.data;
+  }
+  return {
+    me: () => req('GET', '/me'),
+    login: (slug, pin) => req('POST', '/login', { slug, pin }),
+    logout: () => req('POST', '/logout', {}),
+    sync: (since) => req('GET', `/sync${since ? `?since=${encodeURIComponent(since)}` : ''}`),
+    createClient: (body) => req('POST', '/clients', body),
+    patchClient: (id, body) => req('PATCH', `/clients/${id}`, body),
+    addJob: (clientId, body) => req('POST', `/clients/${clientId}/jobs`, body),
+    setStatus: (jobId, statusId) => req('PATCH', `/jobs/${jobId}`, { status_id: statusId }),
+  };
+}
+
+export const api = makeApi(() => transport);
 
 export function newId() {
   if (globalThis.crypto?.randomUUID) return crypto.randomUUID();

@@ -1,16 +1,18 @@
-import { useEffect, useState } from 'react';
+// The "can I trust this?" indicator: online/offline, syncing, changes waiting, or fully synced.
+export function pillInfo(s) {
+  if (s.failed > 0) return { cls: 'pill-bad', text: `${s.failed} need${s.failed === 1 ? 's' : ''} attention` };
+  if (!s.reachable) return { cls: 'pill-off', text: s.pending ? `Offline · ${s.pending} waiting` : 'Offline' };
+  if (s.syncing) return { cls: 'pill-busy', text: 'Syncing…' };
+  if (s.pending > 0) return { cls: 'pill-off', text: `${s.pending} waiting to sync` };
+  if (s.error) return { cls: 'pill-bad', text: 'Sync problem' };
+  return { cls: 'pill-on', text: s.ready ? 'Synced' : 'Online' };
+}
 
-// Online/offline indicator. Stage 5 extends this with the "synced" / pending-changes state.
-export default function StatusPill() {
-  const [online, setOnline] = useState(navigator.onLine);
-  useEffect(() => {
-    const on = () => setOnline(true), off = () => setOnline(false);
-    window.addEventListener('online', on); window.addEventListener('offline', off);
-    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
-  }, []);
+export default function StatusPill({ snap, onClick }) {
+  const { cls, text } = pillInfo(snap);
   return (
-    <span className={`pill ${online ? 'pill-on' : 'pill-off'}`} role="status">
-      <span className="dot" aria-hidden="true" />{online ? 'Online' : 'Offline'}
-    </span>
+    <button className={`pill ${cls}`} onClick={onClick} aria-label={`Sync status: ${text}. Tap for details`}>
+      <span className="dot" aria-hidden="true" />{text}
+    </button>
   );
 }

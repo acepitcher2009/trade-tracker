@@ -48,14 +48,57 @@ async function cleanJob(businessId, raw) {
 
 // ---- handlers ---------------------------------------------------------------------------
 
-async function me({ businessId }) {
-  const [b] = await query(
+async function getConfig(businessId) {
+  const [business] = await query(
     `select name, slug, phone_digits, city, state, accent_color, terms from businesses where id = $1`, [businessId]);
-  const job_types = await query(
-    'select id, name from job_types where business_id = $1 and active order by sort_order, name', [businessId]);
+  const job_types_all = await query(
+    'select id, name, active from job_types where business_id = $1 order by sort_order, name', [businessId]);
   const statuses = await query(
     'select id, key, label, color from statuses where business_id = $1 order by sort_order', [businessId]);
-  return json({ business: b, job_types, statuses });
+  return { business, job_types: job_types_all.filter((t) => t.active).map(({ id, name }) => ({ id, name })), job_types_all, statuses };
+}
+
+async function me({ businessId }) {
+  return json(await getConfig(businessId));
+}
+
+const iso = (v) => new Date(v).toISOString();
+
+/**
+ * Bulk pull for the offline cache: everything changed since `since` (or everything).
+ * Two lists are paged together; `next_since` is the earliest "last row" of any truncated list so
+ * nothing is skipped. Re-delivered rows are harmless (client upserts by id).
+ */
+async function syncPull({ businessId }, url) {
+  const raw = url.searchParams.get('since');
+  let since = null;
+  if (raw) {
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) throw new HttpError(400, 'Bad since', { field: 'since' });
+    since = d.toISOString();
+  }
+  const SYNC_LIMIT = Number(process.env.SYNC_PAGE_SIZE) || 5000; // env override exists for tests only
+  const [t] = await query('select now() as server_time');
+  const clients = await query(
+    `select id, name, phone_digits, address, notes, created_at, updated_at from clients
+      where business_id = $1 and ($2::timestamptz is null or updated_at >= $2::timestamptz)
+      order by updated_at, id limit ${SYNC_LIMIT + 1}`, [businessId, since]);
+  const jobs = await query(
+    `select id, client_id, job_type_id, status_id, notes, created_at, updated_at from jobs
+      where business_id = $1 and ($2::timestamptz is null or updated_at >= $2::timestamptz)
+      order by updated_at, id limit ${SYNC_LIMIT + 1}`, [businessId, since]);
+  const cut = [];
+  for (const rows of [clients, jobs]) {
+    if (rows.length > SYNC_LIMIT) { rows.length = SYNC_LIMIT; cut.push(iso(rows[SYNC_LIMIT - 1].updated_at)); }
+  }
+  cut.sort();
+  return json({
+    server_time: iso(t.server_time),
+    config: await getConfig(businessId),
+    clients, jobs,
+    more: cut.length > 0,
+    next_since: cut[0] ?? null,
+  });
 }
 
 async function lookup({ businessId }, url) {
@@ -173,6 +216,7 @@ async function setStatus({ businessId }, jobId, req) {
 const ID = '([0-9a-fA-F-]{36})';
 const ROUTES = [
   ['GET',   /^\/me$/,                            (s, m, url, req) => me(s)],
+  ['GET',   /^\/sync$/,                         (s, m, url) => syncPull(s, url)],
   ['GET',   /^\/lookup$/,                        (s, m, url) => lookup(s, url)],
   ['POST',  /^\/clients$/,                       (s, m, url, req) => createClient(s, req)],
   ['GET',   new RegExp(`^/clients/${ID}$`),      (s, m) => getClientRoute(s, m[1])],

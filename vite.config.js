@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import './scripts/lib/env.js'; // loads .env for the local API (never exposed to the browser)
 
 // Local dev only: serve /api/* from the same handler Netlify runs in production,
@@ -34,4 +35,15 @@ function localApi() {
   };
 }
 
-export default defineConfig({ plugins: [react(), localApi()] });
+// Stamp the service worker with a per-build id so each deploy replaces the old cached app.
+function swBuildId() {
+  return {
+    name: 'sw-build-id', apply: 'build',
+    closeBundle() {
+      const f = 'dist/sw.js';
+      if (existsSync(f)) writeFileSync(f, readFileSync(f, 'utf8').replace('__BUILD_ID__', String(Date.now())));
+    },
+  };
+}
+
+export default defineConfig({ plugins: [react(), localApi(), swBuildId()] });
