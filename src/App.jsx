@@ -57,15 +57,15 @@ export default function App() {
     setPhase('login');
   };
 
-  if (phase === 'loading') return <div className="boot" aria-busy="true">Loading…</div>;
+  if (phase === 'loading') return <main className="boot" aria-busy="true">Loading…</main>;
   if (phase === 'login') return <Login onDone={boot} />;
   if (phase === 'needs-connection') {
     return (
-      <div className="login">
+      <main className="login">
         <h1>Trade Tracker</h1>
         <p className="hint">You need a connection to sign in the first time on this phone.</p>
         <button className="btn btn-primary" onClick={boot}>Try again</button>
-      </div>
+      </main>
     );
   }
   return <Shell data={data} onSignOut={onSignOut} onAuthExpired={onAuthExpired} />;
@@ -99,11 +99,13 @@ function Shell({ data, onSignOut, onAuthExpired }) {
   const noun = terms.client || 'Client';
   return (
     <div className="app">
-      <header className="topbar">
-        <div className="brand">{cfg.business.name}</div>
-        <button className="link" onClick={onSignOut}>Sign out</button>
+      <header>
+        <div className="topbar">
+          <div className="brand">{cfg.business.name}</div>
+          <button className="link" onClick={onSignOut}>Sign out</button>
+        </div>
+        <StatusPill snap={snap} onClick={() => setSheet(true)} />
       </header>
-      <StatusPill snap={snap} onClick={() => setSheet(true)} />
       <main>
         {screen.name === 'lookup' && (
           <Lookup data={data} snap={snap} terms={terms} initialQ={screen.q}

@@ -93,6 +93,7 @@ export default function Lookup({ data, snap, terms, initialQ, onAdd, onOpen }) {
 
   return (
     <section>
+      <h1 className="sr-only">Look up a {noun.toLowerCase()}</h1>
       <label className="big-label" htmlFor="phone">Phone number</label>
       <input id="phone" ref={input} className="big-input" type="tel" inputMode="tel" autoComplete="off"
         autoFocus placeholder="Number or last 4" value={q}

@@ -15,6 +15,7 @@
     "seed": "node scripts/seed.js",
     "onboard": "node scripts/onboard.js",
     "set-pin": "node scripts/set-pin.js",
+    "export": "node scripts/export.js",
     "test": "node --test \"test/*.test.js\""
   },
   "dependencies": {

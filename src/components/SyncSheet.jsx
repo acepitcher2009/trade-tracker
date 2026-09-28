@@ -30,6 +30,9 @@ export default function SyncSheet({ data, snap, onClose }) {
             <button className="btn btn-ghost" onClick={() => data.retryFailed()}>Try them again</button>
           </div>
         )}
+        {snap.reachable && (
+          <a className="btn btn-ghost btn-link" href="/api/export?format=csv" download>Download my data (spreadsheet)</a>
+        )}
         <div className="row">
           <button className="btn btn-primary" disabled={snap.syncing} onClick={() => data.sync()}>{snap.syncing ? 'Syncing…' : 'Sync now'}</button>
           <button className="btn btn-ghost" onClick={onClose}>Close</button>

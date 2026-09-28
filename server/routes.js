@@ -5,6 +5,7 @@ import { HttpError, json, readJson, assertSameOrigin, clientIp } from './http.js
 import { login, logout, requireSession } from './auth.js';
 import { uuid, str } from './validate.js';
 import { normalizePhone, parseLookup } from '../shared/phone.js';
+import { loadExport, toCsv } from './export.js';
 
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
@@ -211,11 +212,23 @@ async function setStatus({ businessId }, jobId, req) {
   return json({ job: await getJob(businessId, jid) });
 }
 
+async function exportRoute({ businessId }, url) {
+  const format = (url.searchParams.get('format') || 'json').toLowerCase();
+  if (format !== 'json' && format !== 'csv') throw new HttpError(400, 'format must be json or csv', { field: 'format' });
+  const data = await loadExport(businessId);
+  const name = `${data.business.slug}-export-${data.exported_at.slice(0, 10)}.${format}`;
+  const headers = { 'content-disposition': `attachment; filename="${name}"`, 'cache-control': 'no-store' };
+  return format === 'csv'
+    ? new Response(toCsv(data), { status: 200, headers: { ...headers, 'content-type': 'text/csv; charset=utf-8' } })
+    : new Response(JSON.stringify(data, null, 2), { status: 200, headers: { ...headers, 'content-type': 'application/json; charset=utf-8' } });
+}
+
 // ---- router -----------------------------------------------------------------------------
 
 const ID = '([0-9a-fA-F-]{36})';
 const ROUTES = [
   ['GET',   /^\/me$/,                            (s, m, url, req) => me(s)],
+  ['GET',   /^\/export$/,                       (s, m, url) => exportRoute(s, url)],
   ['GET',   /^\/sync$/,                         (s, m, url) => syncPull(s, url)],
   ['GET',   /^\/lookup$/,                        (s, m, url) => lookup(s, url)],
   ['POST',  /^\/clients$/,                       (s, m, url, req) => createClient(s, req)],

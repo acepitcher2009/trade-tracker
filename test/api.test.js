@@ -212,3 +212,30 @@ test('ISOLATION: business B can never see or modify business A data', { skip }, 
   assert.notEqual(bOwn.data.client.id, a.id);
   assert.equal((await call('GET', `/lookup?q=${PHONE}`, { cookie: A.cookie })).data.matches[0].name, 'Pat Rancher');
 });
+
+test('export: own data only, JSON + CSV, formula-injection safe, needs a session', { skip }, async () => {
+  const jt = A.me.job_types[0].id;
+  await call('POST', '/clients', { cookie: A.cookie, body: { name: '=HYPERLINK("http://x")', phone: '9795558801', notes: 'line1\nline2, "quoted"', job: { job_type_id: jt } } });
+  assert.equal((await call('GET', '/export?format=csv')).status, 401);
+  assert.equal((await call('GET', '/export?format=xml', { cookie: A.cookie })).status, 400);
+
+  const res = await handle(new Request('http://localhost/api/export?format=csv', { headers: { cookie: A.cookie } }));
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-disposition'), /attachment; filename=".*\.csv"/);
+  const bytes = Buffer.from(await res.arrayBuffer());
+  assert.deepEqual([...bytes.subarray(0, 3)], [0xef, 0xbb, 0xbf], "UTF-8 BOM so Excel reads it correctly");
+  const csv = bytes.toString("utf8");
+  assert.ok(csv.includes("client_name,client_phone"));
+  assert.ok(csv.includes(`"'=HYPERLINK(""http://x"")"`), 'formula neutralized + quotes escaped');
+  assert.ok(csv.includes('"line1\nline2, ""quoted"""'), 'commas/newlines/quotes quoted');
+  assert.ok(csv.includes('(979) 555-8801'));
+
+  const json = await (await handle(new Request('http://localhost/api/export', { headers: { cookie: A.cookie } }))).json();
+  assert.equal(json.business.slug, A.slug);
+  assert.ok(json.clients.some((c) => c.phone_digits === '9795558801' && c.jobs.length === 1));
+  assert.equal(json.business.pin_hash, undefined);
+
+  const other = await (await handle(new Request('http://localhost/api/export', { headers: { cookie: B.cookie } }))).json();
+  assert.equal(other.business.slug, B.slug);
+  assert.ok(!other.clients.some((c) => c.phone_digits === '9795558801'), "B's export never contains A's clients");
+});

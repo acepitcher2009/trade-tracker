@@ -3,6 +3,9 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[build.environment]
+  NODE_VERSION = "22"
+
 [functions]
   node_bundler = "esbuild"
 
@@ -12,6 +15,8 @@
     Strict-Transport-Security = "max-age=63072000; includeSubDomains"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "same-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 
 # The service worker and HTML must always be revalidated so deploys reach phones quickly.
 [[headers]]

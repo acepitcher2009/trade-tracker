@@ -25,6 +25,7 @@ export default function Login({ onDone }) {
   };
 
   return (
+    <main className="login-wrap">
     <form className="login" onSubmit={submit}>
       <h1>Trade Tracker</h1>
       <label>Business ID
@@ -41,5 +42,6 @@ export default function Login({ onDone }) {
         {busy ? 'Signing in…' : 'Sign in'}
       </button>
     </form>
+    </main>
   );
 }
