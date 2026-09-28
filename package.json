@@ -4,8 +4,13 @@
   "private": true,
   "type": "module",
   "description": "Multi-tenant client & job tracker for local service businesses (PWA).",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview",
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
     "onboard": "node scripts/onboard.js",
@@ -13,6 +18,12 @@
     "test": "node --test \"test/*.test.js\""
   },
   "dependencies": {
-    "@neondatabase/serverless": "^1.0.0"
+    "@neondatabase/serverless": "^1.0.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.1",
+    "vite": "^8.3.1"
   }
 }
