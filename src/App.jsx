@@ -3,6 +3,7 @@ import { api } from './api.js';
 import Login from './screens/Login.jsx';
 import Lookup from './screens/Lookup.jsx';
 import QuickAdd from './screens/QuickAdd.jsx';
+import ClientCard from './screens/ClientCard.jsx';
 import StatusPill from './components/StatusPill.jsx';
 
 export default function App() {
@@ -43,7 +44,8 @@ export default function App() {
       <main>
         {screen.name === 'lookup' && (
           <Lookup me={me} terms={terms} initialQ={screen.q}
-            onAdd={(phone) => setScreen({ name: 'add', phone })} onExpired={expired} />
+            onAdd={(phone) => setScreen({ name: 'add', phone })}
+            onOpen={(c) => setScreen({ name: 'client', id: c.id, phone: c.phone_digits })} onExpired={expired} />
         )}
         {screen.name === 'add' && (
           <QuickAdd me={me} terms={terms} phone={screen.phone} onExpired={expired}
@@ -52,6 +54,10 @@ export default function App() {
               setToast(created ? `${terms.client || 'Client'} saved` : `Already a ${(terms.client || 'client').toLowerCase()} — showing their record`);
               setScreen({ name: 'lookup', q: client.phone_digits });
             }} />
+        )}
+        {screen.name === 'client' && (
+          <ClientCard me={me} terms={terms} id={screen.id} onExpired={expired}
+            onBack={() => setScreen({ name: 'lookup', q: screen.phone })} />
         )}
       </main>
       {toast && <div className="toast" role="status">{toast}</div>}

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { formatPhone, parseLookup } from '../../shared/phone.js';
 import InstallTip from '../components/InstallTip.jsx';
+import { fmtDate, jobsText } from '../format.js';
 
 // Keep only digits; a pasted "+1 (979) 555-1234" becomes 9795551234.
 function clean(raw) {
@@ -10,8 +11,6 @@ function clean(raw) {
   return d.slice(0, 10);
 }
 
-const fmtDate = (iso) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-const jobsText = (n) => (n === 0 ? 'No jobs yet' : `${n} job${n === 1 ? '' : 's'}`);
 
 function ClientInfo({ c }) {
   return (
@@ -26,19 +25,17 @@ function ClientInfo({ c }) {
   );
 }
 
-export default function Lookup({ terms, initialQ, onAdd, onExpired }) {
+export default function Lookup({ terms, initialQ, onAdd, onOpen, onExpired }) {
   const noun = terms.client || 'Client';
   const [q, setQ] = useState(clean(initialQ || ''));
   const [result, setResult] = useState(null); // { q, mode, matches }
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
-  const [picked, setPicked] = useState(null);
   const input = useRef(null);
 
   useEffect(() => { input.current?.focus(); }, []);
 
   useEffect(() => {
-    setPicked(null);
     const p = parseLookup(q);
     if (p.mode === 'partial') { setResult(null); setErr(''); setLoading(false); return; }
     const ctl = new AbortController();
@@ -57,7 +54,7 @@ export default function Lookup({ terms, initialQ, onAdd, onExpired }) {
 
   const parsed = parseLookup(q);
   const fresh = result && result.q === q ? result : null;
-  const shown = picked ? [picked] : fresh?.matches ?? [];
+  const shown = fresh?.matches ?? [];
 
   let body = null;
   if (err) {
@@ -83,17 +80,18 @@ export default function Lookup({ terms, initialQ, onAdd, onExpired }) {
     );
   } else if (shown.length === 1) {
     body = (
-      <div className="banner banner-existing" role="status">
+      <button className="banner banner-existing banner-pick" onClick={() => onOpen(shown[0])}>
         <div className="banner-title">EXISTING {noun.toUpperCase()}</div>
         <ClientInfo c={shown[0]} />
-      </div>
+        <div className="banner-open">Open {noun.toLowerCase()} card ›</div>
+      </button>
     );
   } else {
     body = (
       <div role="status">
         <p className="hint">{shown.length} {noun.toLowerCase()}s end in {parsed.last4} — tap one:</p>
         {shown.map((c) => (
-          <button key={c.id} className="banner banner-existing banner-pick" onClick={() => setPicked(c)}>
+          <button key={c.id} className="banner banner-existing banner-pick" onClick={() => onOpen(c)}>
             <ClientInfo c={c} />
           </button>
         ))}

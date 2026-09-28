@@ -26,6 +26,10 @@ export const api = {
   logout: () => req('POST', '/logout', {}),
   lookup: (q, signal) => req('GET', `/lookup?q=${encodeURIComponent(q)}`, undefined, signal),
   createClient: (body) => req('POST', '/clients', body),
+  getClient: (id) => req('GET', `/clients/${id}`),
+  patchClient: (id, body) => req('PATCH', `/clients/${id}`, body),
+  addJob: (clientId, body) => req('POST', `/clients/${clientId}/jobs`, body),
+  setStatus: (jobId, statusId) => req('PATCH', `/jobs/${jobId}`, { status_id: statusId }),
 };
 
 export function newId() {
