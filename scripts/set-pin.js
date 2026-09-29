@@ -1,5 +1,6 @@
 // Change a business PIN: npm run set-pin -- <slug>   (PIN typed hidden; never printed)
 import { getPool, fail } from './lib/db.js';
+import { assertTarget } from './lib/guard.js';
 import { hashPin } from '../shared/pin.js';
 import { askSecret } from './lib/prompt.js';
 
@@ -8,6 +9,7 @@ try {
   if (!slug) throw new Error('Usage: npm run set-pin -- <business-slug>');
   const pin = await askSecret('New PIN (6-8 digits, hidden): ', 'NEW_PIN');
   const pool = getPool();
+  await assertTarget(pool);
   try {
     const r = await pool.query('update businesses set pin_hash = $1 where slug = $2 returning id', [hashPin(pin), slug]);
     if (!r.rowCount) throw new Error(`No business with slug "${slug}".`);

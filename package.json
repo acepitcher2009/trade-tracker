@@ -13,9 +13,13 @@
     "preview": "vite preview",
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
+    "seed-demo": "node scripts/seed-demo.js",
     "onboard": "node scripts/onboard.js",
     "set-pin": "node scripts/set-pin.js",
+    "invite": "node scripts/invite.js",
+    "seed-catalog": "node scripts/seed-catalog.js",
     "export": "node scripts/export.js",
+    "vapid": "node scripts/vapid.js",
     "test": "node --test \"test/*.test.js\""
   },
   "dependencies": {

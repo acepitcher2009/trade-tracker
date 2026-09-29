@@ -6,6 +6,7 @@ const store = {
   set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } },
 };
 
+
 export default function Login({ onDone }) {
   const [slug, setSlug] = useState(store.get('tt_slug'));
   const [pin, setPin] = useState('');

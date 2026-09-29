@@ -5,3 +5,5 @@ dist
 .DS_Store
 *.log
 exports/
+_incoming/
+Claude outputs/

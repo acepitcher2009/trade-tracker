@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizePhone, parseLookup, formatPhone } from '../shared/phone.js';
+import { normalizePhone, formatPhone } from '../shared/phone.js';
 import { hashPin, verifyPin } from '../shared/pin.js';
 
 test('three formats resolve to the same digits', () => {
@@ -10,11 +10,6 @@ test('three formats resolve to the same digits', () => {
 });
 test('invalid numbers return null', () => {
   for (const s of ['', null, '555-1234', '29795551234', '1234']) assert.equal(normalizePhone(s), null, String(s));
-});
-test('lookup modes', () => {
-  assert.deepEqual(parseLookup('1234'), { mode: 'last4', last4: '1234' });
-  assert.equal(parseLookup('(979) 555-1234').mode, 'full');
-  assert.equal(parseLookup('97955').mode, 'partial');
 });
 test('formatPhone', () => assert.equal(formatPhone('9794921302'), '(979) 492-1302'));
 test('pin hash/verify', () => {

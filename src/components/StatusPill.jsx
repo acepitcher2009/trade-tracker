@@ -8,8 +8,9 @@ export function pillInfo(s) {
   return { cls: 'pill-on', text: s.ready ? 'Synced' : 'Online' };
 }
 
-export default function StatusPill({ snap, onClick }) {
-  const { cls, text } = pillInfo(snap);
+export default function StatusPill({ snap, onClick, demo }) {
+  const { cls, text: liveText } = pillInfo(snap);
+  const text = demo ? 'Sample tour' : liveText;
   return (
     <button className={`pill ${cls}`} onClick={onClick} aria-label={`Sync status: ${text}. Tap for details`}>
       <span className="dot" aria-hidden="true" />{text}

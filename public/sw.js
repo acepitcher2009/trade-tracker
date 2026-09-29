@@ -53,3 +53,32 @@ self.addEventListener('fetch', (event) => {
     return res;
   })());
 });
+
+// Alerts: the push itself carries no text. Ask the server (with the owner's own sign-in) what happened, then show it.
+self.addEventListener('push', (event) => {
+  event.waitUntil((async () => {
+    let title = 'Quote accepted', body = 'A customer accepted your quote. Open the app to see who.';
+    try {
+      const res = await fetch('/api/push/latest', { credentials: 'same-origin' });
+      const d = res.ok ? await res.json() : {};
+      if (d.name && d.kind === 'declined') {
+        title = `${d.name} declined your quote`;
+        body = 'Open the app to see why and follow up.';
+      } else if (d.name) {
+        title = `${d.name} accepted your quote`;
+        body = d.total_cents != null ? `${(d.total_cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}. Call them to schedule the job.` : 'Call them to schedule the job.';
+      }
+    } catch { /* offline: the generic message is fine */ }
+    await self.registration.showNotification(title, { body, icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', tag: 'quote-accepted', renotify: true });
+  })());
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const open = all.find((c) => new URL(c.url).origin === self.location.origin);
+    if (open) return open.focus();
+    return self.clients.openWindow('/');
+  })());
+});

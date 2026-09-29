@@ -37,6 +37,10 @@ export async function createBusiness(pool, { name, slug, phone, city, state, pre
         'insert into statuses (business_id, key, label, sort_order, color) values ($1,$2,$3,$4,$5)',
         [biz.id, s.key, s.label, i, s.color]);
     }
+    await client.query(
+      'update businesses set tax_rate_bps = $2, min_charge_cents = $3, uses_visits = $4, default_deposit_pct = $5 where id = $1',
+      [biz.id, p.taxBps ?? 0, Math.round((p.minChargeDollars ?? 0) * 100), p.usesVisits !== false, p.depositPct ?? 50]);
+    await seedCatalog(client, biz.id, p);
     await client.query('commit');
     return biz;
   } catch (e) {
@@ -46,4 +50,19 @@ export async function createBusiness(pool, { name, slug, phone, city, state, pre
   } finally {
     client.release();
   }
+}
+
+/** Copy a preset's sample price list into a business (skips items that already exist by name). */
+export async function seedCatalog(db, businessId, preset) {
+  const types = new Map((await db.query('select id, name from job_types where business_id = $1', [businessId])).rows.map((r) => [r.name, r.id]));
+  let n = 0;
+  for (const [i, [name, unit, dollars, typeName, kind = 'item']] of (preset.catalog ?? []).entries()) {
+    const r = await db.query(
+      `insert into catalog_items (business_id, name, unit, unit_price_cents, job_type_id, sort_order, kind)
+       select $1, $2, $3, $4, $5, $6, $7
+        where not exists (select 1 from catalog_items where business_id = $1 and name = $2)`,
+      [businessId, name, unit, Math.round(dollars * 100), types.get(typeName) ?? null, i, kind]);
+    n += r.rowCount;
+  }
+  return n;
 }

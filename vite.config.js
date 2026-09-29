@@ -46,4 +46,7 @@ function swBuildId() {
   };
 }
 
-export default defineConfig({ plugins: [react(), localApi(), swBuildId()] });
+export default defineConfig({
+  plugins: [react(), localApi(), swBuildId()],
+  define: { __APP_BUILD__: JSON.stringify(String(Date.now())) }, // changes every build: phones re-download their data once per new version
+});

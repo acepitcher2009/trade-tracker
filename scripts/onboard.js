@@ -5,6 +5,7 @@
 import { parseArgs } from 'node:util';
 import { PRESETS } from '../db/presets.js';
 import { getPool, fail } from './lib/db.js';
+import { assertTarget } from './lib/guard.js';
 import { createBusiness, slugify } from './lib/tenant.js';
 import { ask, askSecret } from './lib/prompt.js';
 
@@ -30,6 +31,7 @@ try {
   }
 
   const pool = getPool();
+  await assertTarget(pool);
   try {
     const biz = await createBusiness(pool, { name, slug, phone, city, state, preset, accent: a.accent, pin });
     console.log(`\nCreated "${name}" (login slug: ${biz.slug}, preset: ${preset}).`);

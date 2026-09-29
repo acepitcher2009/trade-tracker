@@ -38,13 +38,30 @@ export function makeApi(getTransport) {
   }
   return {
     me: () => req('GET', '/me'),
+    invite: (token) => req('GET', `/invite/${encodeURIComponent(token)}`),
+    consumeInvite: (token) => req('POST', `/invite/${encodeURIComponent(token)}/consume`, {}),
     login: (slug, pin) => req('POST', '/login', { slug, pin }),
     logout: () => req('POST', '/logout', {}),
-    sync: (since) => req('GET', `/sync${since ? `?since=${encodeURIComponent(since)}` : ''}`),
+    sync: (since, { config = true } = {}) => req('GET', `/sync?${[since ? `since=${encodeURIComponent(since)}` : '', config ? '' : 'config=0'].filter(Boolean).join('&')}`),
     createClient: (body) => req('POST', '/clients', body),
+    deleteClient: (id) => req('DELETE', `/clients/${id}`),
     patchClient: (id, body) => req('PATCH', `/clients/${id}`, body),
     addJob: (clientId, body) => req('POST', `/clients/${clientId}/jobs`, body),
-    setStatus: (jobId, statusId) => req('PATCH', `/jobs/${jobId}`, { status_id: statusId }),
+    putQuote: (jobId, quote, jobTypeId) => req('PUT', `/jobs/${jobId}/quote`, { quote, ...(jobTypeId ? { job_type_id: jobTypeId } : {}) }),
+    declineQuote: (token, reason) => req('POST', `/q/${encodeURIComponent(token)}/decline`, { ...(reason ? { reason } : {}) }),
+    putCatalogItem: (id, body) => req('PUT', `/catalog/${id}`, body),
+    deleteCatalogItem: (id) => req('DELETE', `/catalog/${id}`),
+    patchBusiness: (body) => req('PATCH', '/business', body),
+    publicQuote: (token) => req('GET', `/q/${encodeURIComponent(token)}`),
+    acceptQuote: (token, name, selection, agree = true) => req('POST', `/q/${encodeURIComponent(token)}/accept`, { name, agree, ...(selection ? { selection } : {}) }),
+    pushKey: () => req('GET', '/push/key'),
+    pushSubscribe: (endpoint) => req('POST', '/push/subscribe', { endpoint }),
+    pushUnsubscribe: (endpoint) => req('POST', '/push/unsubscribe', { endpoint }),
+    patchJob: (jobId, fields) => req('PATCH', `/jobs/${jobId}`, fields),
+    setStatus: (jobId, statusId, schedule) => req('PATCH', `/jobs/${jobId}`, {
+      status_id: statusId,
+      ...(schedule ? { scheduled_date: schedule.date ?? null, scheduled_time: schedule.time ?? null } : {}),
+    }),
   };
 }
 

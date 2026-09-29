@@ -14,17 +14,3 @@ export function formatPhone(digits) {
   const d = String(digits ?? '');
   return /^\d{10}$/.test(d) ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : d;
 }
-
-/**
- * Classify what the user typed into the lookup box.
- *  - full:    a complete number  -> exact match on phone_digits
- *  - last4:   exactly 4 digits   -> match right(phone_digits, 4), may return several
- *  - partial: anything else      -> not searchable yet
- */
-export function parseLookup(input) {
-  const raw = String(input ?? '').replace(/\D/g, '');
-  const full = normalizePhone(raw);
-  if (full) return { mode: 'full', digits: full };
-  if (raw.length === 4) return { mode: 'last4', last4: raw };
-  return { mode: 'partial', digits: raw };
-}

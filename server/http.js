@@ -7,10 +7,9 @@ export class HttpError extends Error {
 }
 
 export function json(data, status = 200, headers = {}) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers },
-  });
+  const h = new Headers({ 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+  for (const [k, v] of Object.entries(headers)) for (const one of [].concat(v)) h.append(k, one); // set-cookie may be a list
+  return new Response(JSON.stringify(data), { status, headers: h });
 }
 
 /** Mutating requests must be JSON (forces a CORS preflight for cross-site callers). */
